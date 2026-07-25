@@ -1,0 +1,32 @@
+{
+  "fed-twin-cmapss-real": {
+    "n_flags_raised": 287,
+    "n_confirmed": 0,
+    "precision": 0.0,
+    "mean_lead_time": null,
+    "std_lead_time": null,
+    "lead_times": []
+  },
+  "fed-twin-femto-real": {
+    "n_flags_raised": 128,
+    "n_confirmed": 5,
+    "precision": 0.0390625,
+    "mean_lead_time": 2.4,
+    "std_lead_time": 1.019803902718557,
+    "lead_times": [
+      4,
+      2,
+      3,
+      2,
+      1
+    ]
+  },
+  "fed-twin-mimii-real": {
+    "n_flags_raised": 71,
+    "n_confirmed": 0,
+    "precision": 0.0,
+    "mean_lead_time": null,
+    "std_lead_time": null,
+    "lead_times": []
+  }
+}
