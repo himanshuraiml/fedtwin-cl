@@ -8,3 +8,11 @@ __pycache__/
 *.docx
 *.pdf
 !README.md
+
+# Raw re-downloaded datasets and intermediate archives (large, publicly
+# re-fetchable from NASA/PHM Society/Zenodo -- see EXPERIMENT_PROCEDURE.md)
+real_data/cmapss/
+real_data/femto/
+real_data/mimii/
+real_data/mimii_zips/
+real_data/processed/

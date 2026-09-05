@@ -1,0 +1,41 @@
+{
+  "page-hinkley": {
+    "detector": "page-hinkley",
+    "total_commits": 14,
+    "mean_tasks_committed": 0.5833333333333334,
+    "mean_abs_timing_error": 3.0,
+    "n_timing_samples": 3,
+    "fleet_fps": -0.6731459826502638,
+    "fleet_fbwt": -0.39157938743786264,
+    "protected_n": 2,
+    "protected_mean_fbwt": 0.0,
+    "missed_n": 46,
+    "missed_mean_fbwt": -0.4086045781960306
+  },
+  "kswin_alpha0.01_naive": {
+    "detector": "kswin_alpha0.01_naive",
+    "total_commits": 0,
+    "mean_tasks_committed": 0.0,
+    "mean_abs_timing_error": null,
+    "n_timing_samples": 0,
+    "fleet_fps": -0.46439775632461533,
+    "fleet_fbwt": -0.22724676046830913,
+    "protected_n": 0,
+    "protected_mean_fbwt": null,
+    "missed_n": 48,
+    "missed_mean_fbwt": -0.22724676046830913
+  },
+  "kswin_alpha0.10_calibrated": {
+    "detector": "kswin_alpha0.10_calibrated",
+    "total_commits": 13,
+    "mean_tasks_committed": 0.5416666666666666,
+    "mean_abs_timing_error": 3.923076923076923,
+    "n_timing_samples": 13,
+    "fleet_fps": -0.9716981208572785,
+    "fleet_fbwt": -0.5097994927782565,
+    "protected_n": 13,
+    "protected_mean_fbwt": 0.0,
+    "missed_n": 35,
+    "missed_mean_fbwt": -0.6991535900958947
+  }
+}
