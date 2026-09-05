@@ -33,6 +33,7 @@ N_STAGES_DEFAULT = 3
 BENCH_CONFIG = {
     "cmapss": dict(module="real_pipeline_cmapss", label="fed-twin-cmapss-real", oracle_mode="simple"),
     "femto": dict(module="real_pipeline_femto", label="fed-twin-femto-real", oracle_mode="max_stage"),
+    "mimii": dict(module="real_pipeline_mimii", label="fed-twin-mimii-real", oracle_mode="max_stage"),
 }
 
 
@@ -43,24 +44,38 @@ def load_pipeline(name):
     return P, cfg
 
 
+def stream_cls(P):
+    return getattr(P, "RealSiteStream", None) or getattr(P, "MimiiSiteStream")
+
+
+def is_mimii(label):
+    return "mimii" in label
+
+
 def run_with_width(P, cfg, methods, width_mult, seed=1):
     label = cfg["label"]
     oracle_mode = cfg["oracle_mode"]
     width = P.C_SHARED * width_mult
     cmax = {k: int(v * width_mult) for k, v in P.CMAX.items()}
+    mimii = is_mimii(label)
 
     data = np.load(P.DATA_PATH, allow_pickle=True)
     sites_data = data["sites"]
-    n_sensors = sites_data[0]["windows"].shape[2]
-    window = sites_data[0]["windows"].shape[1]
+    if mimii:
+        any_w = sites_data[0]["round_windows"][1]  # round 0 can be empty; round 1 is not
+        n_sensors, window = any_w.shape[-1], any_w.shape[1]
+    else:
+        n_sensors = sites_data[0]["windows"].shape[2]
+        window = sites_data[0]["windows"].shape[1]
     n_sites = len(sites_data)
 
+    SC = stream_cls(P)
     records = []
     for method in methods:
         method_idx = P.METHODS.index(method) if method in P.METHODS else 99
         torch.manual_seed(seed * 1000 + method_idx + width_mult * 7)
         theta_global = P.init_backbone(n_sensors, window, width=width, seed=seed * 1000 + method_idx + width_mult * 7)
-        streams = [P.RealSiteStream(sites_data[i], site_id=i) for i in range(n_sites)]
+        streams = [SC(sites_data[i], site_id=i) for i in range(n_sites)]
         thetas = [P.clone_theta(theta_global) for _ in range(n_sites)]
         phs = [P.PageHinkley() for _ in range(n_sites)]
         global_registry = torch.zeros(width, dtype=torch.bool, device=P.DEVICE)
@@ -118,7 +133,9 @@ def run_with_width(P, cfg, methods, width_mult, seed=1):
                 if stage_changed and old_stage not in task_eval_at_commit[i]:
                     Xc, yc = stream.eval_on_stage(old_stage)
                     m = task_masks[i].get(old_stage) if use_masking else None
-                    task_eval_at_commit[i][old_stage] = P.eval_metric(theta_before, Xc.to(P.DEVICE), yc.to(P.DEVICE), m)
+                    val = P.eval_metric(theta_before, Xc.to(P.DEVICE), yc.to(P.DEVICE), m)
+                    if val is not None:  # MIMII: AUC undefined for a single-class batch
+                        task_eval_at_commit[i][old_stage] = val
 
                 if newly_committed is not None:
                     site_free = site_free & ~newly_committed
@@ -131,19 +148,22 @@ def run_with_width(P, cfg, methods, width_mult, seed=1):
                     commit_count[i] += 1
 
                 site_free_t = site_free.float()
-                for _ in range(P.LOCAL_STEPS):
-                    Xb, yb = stream.minibatch()
-                    P.zero_grad(theta)
-                    l = P.loss_fn(theta, Xb.to(P.DEVICE), yb.to(P.DEVICE))
-                    l.backward()
-                    P.clip_grads(theta)
-                    if use_masking:
-                        P.mask_grad(theta, site_free_t)
-                    with torch.no_grad():
-                        update_keys = ("conv_w", "conv_b", "fc_w") if use_masking else theta.keys()
-                        for k in update_keys:
-                            theta[k] -= P.LR * theta[k].grad
-                    P.zero_grad(theta)
+                Xb, yb = stream.minibatch()
+                if len(yb) > 0:
+                    for _ in range(P.LOCAL_STEPS):
+                        if not mimii:
+                            Xb, yb = stream.minibatch()  # cmapss/femto: resample every step; mimii reuses the round's fixed clip batch
+                        P.zero_grad(theta)
+                        l = P.loss_fn(theta, Xb.to(P.DEVICE), yb.to(P.DEVICE))
+                        l.backward()
+                        P.clip_grads(theta)
+                        if use_masking:
+                            P.mask_grad(theta, site_free_t)
+                        with torch.no_grad():
+                            update_keys = ("conv_w", "conv_b", "fc_w") if use_masking else theta.keys()
+                            for k in update_keys:
+                                theta[k] -= P.LR * theta[k].grad
+                        P.zero_grad(theta)
 
             if use_masking:
                 with torch.no_grad():
@@ -165,7 +185,8 @@ def run_with_width(P, cfg, methods, width_mult, seed=1):
                 Xc, yc = streams[i].eval_on_stage(stage_idx)
                 m = task_masks[i].get(stage_idx) if use_masking else None
                 final = P.eval_metric(thetas[i], Xc.to(P.DEVICE), yc.to(P.DEVICE), m)
-                fps_vals.append(final)
+                if final is not None:
+                    fps_vals.append(final)
             Xc, yc = streams[i].eval_on_stage(true_stage_prev[i])
             current_task_metric = P.eval_metric(thetas[i], Xc.to(P.DEVICE), yc.to(P.DEVICE))
             fps_vals_by_site.append(float(np.mean(fps_vals)) if fps_vals else None)
@@ -176,7 +197,8 @@ def run_with_width(P, cfg, methods, width_mult, seed=1):
                              "commit_count": commit_count[i], "is_summary_record": True})
         mean_fps = np.mean([v for v in fps_vals_by_site if v is not None])
         mean_cur = np.mean([r["current_task_metric"] for r in records
-                             if r.get("is_summary_record") and r["method"] == method and r["width_mult"] == width_mult])
+                             if r.get("is_summary_record") and r["method"] == method
+                             and r["width_mult"] == width_mult and r["current_task_metric"] is not None])
         print(f"    width={width_mult}x ({width} ch) method={method}: "
               f"mean_FPS={mean_fps:.4f} mean_current_task_metric={mean_cur:.4f} "
               f"total_commits={sum(commit_count)}")
@@ -218,7 +240,8 @@ if __name__ == "__main__":
             byM = {}
             for m in ("fedavg", "fedcat-external", "fedtwin-cl"):
                 vals = [r["current_task_metric"] for r in recs
-                        if r["method"] == m and r["width_mult"] == width_mult and r.get("is_summary_record")]
+                        if r["method"] == m and r["width_mult"] == width_mult and r.get("is_summary_record")
+                        and r["current_task_metric"] is not None]
                 byM[m] = np.mean(vals) if vals else None
             gap = byM["fedavg"] - byM["fedtwin-cl"] if byM["fedavg"] is not None and byM["fedtwin-cl"] is not None else None
             print(f"{name} width={width_mult}x: fedavg={byM['fedavg']:.4f} "
