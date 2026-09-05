@@ -90,8 +90,12 @@ def is_mimii(label):
 def run_fedprox(P, label, seed=1, mu=MU_PROX):
     data = np.load(P.DATA_PATH, allow_pickle=True)
     sites_data = data["sites"]
-    n_sensors = sites_data[0]["windows"].shape[2]
-    window = sites_data[0]["windows"].shape[1]
+    if is_mimii(label):
+        any_w = sites_data[0]["round_windows"][1]  # round 0 can be empty; round 1 is not
+        n_sensors, window = any_w.shape[-1], any_w.shape[1]
+    else:
+        n_sensors = sites_data[0]["windows"].shape[2]
+        window = sites_data[0]["windows"].shape[1]
     n_sites = len(sites_data)
     method = "fedprox"
 

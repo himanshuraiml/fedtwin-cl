@@ -6,13 +6,15 @@ generate_real_result_figures.py / generate_real_sweep_figures.py, reused
 unchanged so this figure reads as part of the same visual system.
 
 Panel A: cumulative fleet uplink (log scale), dense FedAvg vs.
-compression-matched FedAvg vs. FedTwin-CL, both real benchmarks tested --
+compression-matched FedAvg vs. FedTwin-CL, all three real benchmarks --
 the single most important new finding this pass (masking's fair marginal
-contribution is ~3-4x, not the ~70-100x the original dense-only comparison
+contribution is ~3-5x, not the ~70-100x the original dense-only comparison
 implied).
 Panel B: capacity sweep -- current-task-metric gap to FedAvg (FedAvg minus
-FedTwin-CL) as a function of backbone width (1x/2x/4x), both benchmarks,
-showing the gap narrows on Fed-Twin-FEMTO but not on Fed-Twin-CMAPSS.
+FedTwin-CL) as a function of backbone width (1x/2x/4x), all three
+benchmarks, showing three different directions: the gap narrows on
+Fed-Twin-FEMTO, is non-monotonic on Fed-Twin-CMAPSS, and widens on
+Fed-Twin-MIMII.
 """
 import json
 import os
@@ -66,8 +68,8 @@ def fig11():
     fig.patch.set_facecolor(SURFACE)
 
     # Panel A: compression-matched uplink
-    benches = ["cmapss", "femto"]
-    labels = ["Fed-Twin-CMAPSS", "Fed-Twin-FEMTO"]
+    benches = ["cmapss", "femto", "mimii"]
+    labels = ["Fed-Twin-CMAPSS", "Fed-Twin-FEMTO", "Fed-Twin-MIMII"]
     dense = []
     matched = []
     fedtwincl = []
@@ -93,7 +95,7 @@ def fig11():
 
     # Panel B: capacity sweep gap-to-FedAvg
     widths = [1, 2, 4]
-    for b, label, color in zip(benches, labels, [CAT["orange"], CAT["aqua"]]):
+    for b, label, color in zip(benches, labels, [CAT["orange"], CAT["aqua"], CAT["violet"]]):
         recs = CAPACITY[b]
         gaps = []
         for wm in widths:
